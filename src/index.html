@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voting App</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.3.4/dist/web3.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+  <h1>Voting DApp</h1>
+  <button onclick="startVoting()">Start Voting</button>
+  <button onclick="stopVoting()">Stop Voting</button>
+
+  <div class="candidates">
+      <div class="candidate" id="candidate0">Kay</div>
+      <div class="candidate" id="candidate1">Aiman</div>
+      <div class="candidate" id="candidate2">Afiq</div>
+  </div>
+
+  <button onclick="registerVoter()">Register Voter</button>
+  <button onclick="vote(0)">Vote for Kay</button>
+  <button onclick="vote(1)">Vote for Aiman</button>
+  <button onclick="vote(2)">Vote for Afiq</button>
+
+  <div id="winnerAnnouncement" class="winner" onclick="announceWinner()">
+    Winner Announcement
+  </div>
+
+  <div id="winnerDisplay" class="winner"></div>
+</div>
+
+<script>
+    // Replace with your contract address and ABI
+    const contractAddress = '0x3cEF3C521C520De88284b7F8927eeB0939A62b78';
+    const contractABI = [
+    {
+      "inputs": [],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "voterAddress",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "candidateId",
+          "type": "uint256"
+        }
+      ],
+      "name": "Voted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "voterAddress",
+          "type": "address"
+        }
+      ],
+      "name": "VoterRegistered",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "winnerName",
+          "type": "string"
+        }
+      ],
+      "name": "WinnerAnnounced",
+      "type": "event"
+    },
+    {
+      "inputs": [],
+      "name": "admin",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function",
+      "constant": true
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "candidates",
+      "outputs": [
+        {
+          "internalType": "string",
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "internalType": "uint256",
+          "name": "voteCount",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function",
+      "constant": true
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "voters",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "isRegistered",
+          "type": "bool"
+        },
+        {
+          "internalType": "bool",
+          "name": "hasVoted",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint256",
+          "name": "votedCandidateId",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function",
+      "constant": true
+    },
+    {
+      "inputs": [],
+      "name": "votingOpen",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function",
+      "constant": true
+    },
+    {
+      "inputs": [],
+      "name": "startVoting",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "stopVoting",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "registerVoter",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "_candidateId",
+          "type": "uint256"
+        }
+      ],
+      "name": "vote",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "announceWinner",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    }
+  ];
+
+   // Connect to the Ethereum node
+    const web3 = new Web3(window.ethereum);
+
+    // Request account access if needed
+    async function requestAccount() {
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
+    }
+
+    // Create a contract instance
+    const votingContract = new web3.eth.Contract(contractABI, contractAddress);
+
+    // Function to send transactions to the contract
+    async function sendTransaction(method, params, callback) {
+        await requestAccount();
+
+        const accounts = await web3.eth.getAccounts();
+        const adminAddress = accounts[0];
+
+        const gas = await method.estimateGas({ from: adminAddress });
+        const gasPrice = await web3.eth.getGasPrice();
+
+        method.send({
+            from: adminAddress,
+            gas: gas,
+            gasPrice: gasPrice,
+            value: 0,
+        })
+        .on('transactionHash', (hash) => {
+            console.log('Transaction Hash:', hash);
+        })
+        .on('receipt', (receipt) => {
+            console.log('Transaction Receipt:', receipt);
+            if (callback) {
+                callback();
+            }
+        })
+        .on('error', (error) => {
+            console.error('Transaction Error:', error);
+        });
+    }
+
+    function startVoting() {
+        const method = votingContract.methods.startVoting();
+        sendTransaction(method);
+    }
+
+    function stopVoting() {
+        const method = votingContract.methods.stopVoting();
+        sendTransaction(method);
+    }
+
+    function registerVoter() {
+        const method = votingContract.methods.registerVoter();
+        sendTransaction(method);
+    }
+
+  // Function to vote with dynamic candidate ID
+  function vote(candidateId) {
+    const method = votingContract.methods.vote(candidateId);
+    sendTransaction(method);
+  }
+
+  // Function to display the winner dynamically
+  function displayWinner(winnerName) {
+    const winnerDisplay = document.getElementById('winnerDisplay');
+    winnerDisplay.innerHTML = `Winner: ${winnerName} 🏆`;
+  }
+
+    // Function to announce winner and display the result
+  async function announceWinner() {
+    const method = votingContract.methods.announceWinner();
+    await requestAccount();
+
+    const accounts = await web3.eth.getAccounts();
+    const adminAddress = accounts[0];
+
+    const gas = await method.estimateGas({ from: adminAddress });
+    const gasPrice = await web3.eth.getGasPrice();
+
+    method.send({
+      from: adminAddress,
+      gas: gas,
+      gasPrice: gasPrice,
+      value: 0,
+    })
+    .on('transactionHash', (hash) => {
+      console.log('Transaction Hash:', hash);
+    })
+    .on('receipt', (receipt) => {
+      console.log('Transaction Receipt:', receipt);
+      // Retrieve winner name from the receipt event data
+      const winnerName = receipt.events.WinnerAnnounced.returnValues.winnerName;
+      // Display the winner in the HTML
+      displayWinner(winnerName);
+    })
+    .on('error', (error) => {
+      console.error('Transaction Error:', error);
+    });
+  }
+</script>
+
+</body>
+</html>
