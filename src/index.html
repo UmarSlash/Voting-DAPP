@@ -30,11 +30,12 @@
   </div>
 
   <div id="winnerDisplay" class="winner"></div>
+  <div id="errorMessage" class="error"></div>
 </div>
 
 <script>
     // Replace with your contract address and ABI
-    const contractAddress = '0x3cEF3C521C520De88284b7F8927eeB0939A62b78';
+    const contractAddress = '0xEDF012646940488AA498f4C70e172909fbDea75f';
     const contractABI = [
     {
       "inputs": [],
@@ -253,26 +254,86 @@
         });
     }
 
+    // Function to handle errors and display messages
+    function handleErrorMessage(message) {
+        const errorMessage = document.getElementById('errorMessage');
+        errorMessage.innerHTML = message;
+        // Clear the error message after a few seconds (adjust the delay as needed)
+        setTimeout(() => {
+            errorMessage.innerHTML = '';
+        }, 7000);
+    }
+
+    // Function to send transactions to the contract with error handling
+    async function sendTransactionWithErrors(method, params, successMessage) {
+        try {
+            await requestAccount();
+
+            const accounts = await web3.eth.getAccounts();
+            const adminAddress = accounts[0];
+
+            const gas = await method.estimateGas({ from: adminAddress });
+            const gasPrice = await web3.eth.getGasPrice();
+
+            const receipt = await method.send({
+                from: adminAddress,
+                gas: gas,
+                gasPrice: gasPrice,
+                value: 0,
+            });
+
+            // Display success message if provided
+            if (successMessage) {
+                console.log(successMessage);
+            }
+
+            return receipt;
+        } catch (error) {
+            // Handle errors and display messages
+            console.error('Transaction Error:', error.message);
+
+            if (error.message.includes("Voter is not registered")) {
+                handleErrorMessage("Voter is not registered.");
+            } else if (error.message.includes("Voter is already registered")) {
+                handleErrorMessage("Voter is already registered.");
+              } else if (error.message.includes("Voting is not open")) {
+                handleErrorMessage("Voting is not open.");
+              } else if (error.message.includes("Voting is already open")) {
+                handleErrorMessage("Voting is already open.");
+              } else if (error.message.includes("Voting is already closed")) {
+                handleErrorMessage("Voting is already closed.");
+              } else if (error.message.includes("Voter has already voted")) {
+                handleErrorMessage("Voter has already voted.");
+              } else if (error.message.includes("Voting is still ongoing")) {
+                handleErrorMessage("Voting is still ongoing.");
+            } else if (error.message.includes("Only the admin can execute this")) {
+                handleErrorMessage("Only the admin can start the voting.");
+            } else {
+                // Generic error message for other issues
+                handleErrorMessage("Transaction failed. Please try again.");
+            }
+        }
+    }
+
     function startVoting() {
         const method = votingContract.methods.startVoting();
-        sendTransaction(method);
+        sendTransactionWithErrors(method, 'Voting has started successfully.');
     }
 
     function stopVoting() {
         const method = votingContract.methods.stopVoting();
-        sendTransaction(method);
+        sendTransactionWithErrors(method, 'Voting has stopped successfully.');
     }
 
     function registerVoter() {
         const method = votingContract.methods.registerVoter();
-        sendTransaction(method);
+        sendTransactionWithErrors(method, 'Voter registered successfully.');
     }
 
-  // Function to vote with dynamic candidate ID
-  function vote(candidateId) {
-    const method = votingContract.methods.vote(candidateId);
-    sendTransaction(method);
-  }
+    function vote(candidateId) {
+        const method = votingContract.methods.vote(candidateId);
+        sendTransactionWithErrors(method, 'Vote submitted successfully.');
+    }
 
   // Function to display the winner dynamically
   function displayWinner(winnerName) {
